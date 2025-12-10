@@ -163,53 +163,120 @@ function init() {
 
 // ==================== ENVIRONMENT ====================
 function createEnvironment() {
-  // Ground - cyberpunk grid floor
-  const groundGeometry = new THREE.PlaneGeometry(200, 200, 100, 100);
-  const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a1a2e,
-    roughness: 0.8,
-    metalness: 0.2
+  // Industrial metal floor with panels
+  const floorGeometry = new THREE.PlaneGeometry(120, 120, 40, 40);
+  const floorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.7,
+    metalness: 0.6
   });
-  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
 
-  // Grid lines
-  const gridHelper = new THREE.GridHelper(200, 100, 0x00ccff, 0x003344);
-  gridHelper.position.y = 0.01;
+  // Glowing grid lines (orange/warning style)
+  const gridHelper = new THREE.GridHelper(120, 60, 0xff6600, 0x332200);
+  gridHelper.position.y = 0.02;
   scene.add(gridHelper);
 
-  // Cityscape background
-  createCityscape();
+  // Arena boundary walls
+  createArenaBoundaries();
 
-  // Particles in the air
+  // Industrial backdrop
+  createIndustrialBackdrop();
+
+  // Ambient particles (sparks and dust)
   createAmbientParticles();
+
+  // Add fog for atmosphere
+  scene.fog = new THREE.FogExp2(0x0a0a12, 0.015);
 }
 
-function createCityscape() {
+function createArenaBoundaries() {
+  const barrierMaterial = new THREE.MeshStandardMaterial({
+    color: 0x222222,
+    roughness: 0.8,
+    metalness: 0.4
+  });
+  const warningMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff3300,
+    transparent: true,
+    opacity: 0.8
+  });
+
+  // Create 4 arena walls
+  const wallPositions = [
+    { x: 0, z: -50, rotation: 0 },
+    { x: 0, z: 50, rotation: Math.PI },
+    { x: -50, z: 0, rotation: Math.PI / 2 },
+    { x: 50, z: 0, rotation: -Math.PI / 2 }
+  ];
+
+  wallPositions.forEach(pos => {
+    // Main barrier
+    const barrierGeometry = new THREE.BoxGeometry(100, 4, 1);
+    const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+    barrier.position.set(pos.x, 2, pos.z);
+    barrier.rotation.y = pos.rotation;
+    barrier.castShadow = true;
+    scene.add(barrier);
+
+    // Warning stripe
+    const stripeGeometry = new THREE.BoxGeometry(100, 0.3, 0.1);
+    const stripe = new THREE.Mesh(stripeGeometry, warningMaterial);
+    stripe.position.set(pos.x, 3.5, pos.z + (pos.z === 0 ? (pos.x < 0 ? 0.5 : -0.5) : (pos.z < 0 ? 0.5 : -0.5)));
+    stripe.rotation.y = pos.rotation;
+    scene.add(stripe);
+  });
+
+  // Corner pillars
+  const pillarGeometry = new THREE.CylinderGeometry(1.5, 2, 8, 8);
+  const pillarMaterial = new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    roughness: 0.6,
+    metalness: 0.5
+  });
+  const pillarPositions = [
+    { x: -48, z: -48 },
+    { x: 48, z: -48 },
+    { x: -48, z: 48 },
+    { x: 48, z: 48 }
+  ];
+
+  pillarPositions.forEach(pos => {
+    const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+    pillar.position.set(pos.x, 4, pos.z);
+    pillar.castShadow = true;
+    scene.add(pillar);
+
+    // Warning light on top
+    const lightGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+    const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+    const light = new THREE.Mesh(lightGeometry, lightMaterial);
+    light.position.set(pos.x, 8.5, pos.z);
+    scene.add(light);
+  });
+}
+
+function createIndustrialBackdrop() {
   const buildingMaterial = new THREE.MeshStandardMaterial({
-    color: 0x15152a,
+    color: 0x151520,
     roughness: 0.9,
     metalness: 0.3
   });
 
-  const glowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ffcc,
-    transparent: true,
-    opacity: 0.3
-  });
-
-  for (let i = 0; i < 50; i++) {
-    const width = Math.random() * 8 + 4;
-    const height = Math.random() * 30 + 10;
-    const depth = Math.random() * 8 + 4;
+  // Factories and industrial buildings
+  for (let i = 0; i < 30; i++) {
+    const width = Math.random() * 15 + 8;
+    const height = Math.random() * 40 + 15;
+    const depth = Math.random() * 15 + 8;
 
     const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
     const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
 
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 50 + 40;
+    const distance = Math.random() * 40 + 70;
 
     building.position.set(
       Math.cos(angle) * distance,
@@ -218,16 +285,42 @@ function createCityscape() {
     );
 
     building.castShadow = true;
-    building.receiveShadow = true;
     scene.add(building);
 
-    // Window lights
-    const windowGeometry = new THREE.PlaneGeometry(width * 0.8, height * 0.8);
-    const windows = new THREE.Mesh(windowGeometry, glowMaterial);
-    windows.position.set(building.position.x, building.position.y, building.position.z + depth / 2 + 0.1);
-    scene.add(windows);
+    // Industrial windows (glowing orange)
+    const windowMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff6600,
+      transparent: true,
+      opacity: 0.4
+    });
+
+    for (let row = 0; row < Math.floor(height / 5); row++) {
+      const windowGeometry = new THREE.PlaneGeometry(width * 0.6, 1.5);
+      const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+      windowMesh.position.set(
+        building.position.x,
+        5 + row * 5,
+        building.position.z + depth / 2 + 0.1
+      );
+      windowMesh.lookAt(0, windowMesh.position.y, 0);
+      scene.add(windowMesh);
+    }
+
+    // Smokestacks on some buildings
+    if (Math.random() > 0.6) {
+      const stackGeometry = new THREE.CylinderGeometry(1, 1.5, 12, 8);
+      const stack = new THREE.Mesh(stackGeometry, buildingMaterial);
+      stack.position.set(
+        building.position.x + (Math.random() - 0.5) * width * 0.5,
+        height + 6,
+        building.position.z
+      );
+      scene.add(stack);
+    }
   }
 }
+
+// Old cityscape removed - using createIndustrialBackdrop instead
 
 function createAmbientParticles() {
   const particleCount = 1000;
@@ -689,157 +782,226 @@ class Robot {
   }
 
   build() {
-    const bodyColor = 0x2a2a4a;
-    const accentColor = 0x00ccff;
-    const metalMaterial = new THREE.MeshStandardMaterial({
-      color: bodyColor,
-      roughness: 0.3,
-      metalness: 0.8
+    // Type-based color schemes
+    let primaryColor, accentColor, eyeColor, glowColor;
+    switch (this.type) {
+      case 'fast':
+        primaryColor = 0x4a2020;
+        accentColor = 0xff4444;
+        eyeColor = 0xff0000;
+        glowColor = 0xff3333;
+        break;
+      case 'heavy':
+        primaryColor = 0x204a20;
+        accentColor = 0x44ff44;
+        eyeColor = 0x00ff00;
+        glowColor = 0x33ff33;
+        break;
+      default: // normal
+        primaryColor = 0x202a4a;
+        accentColor = 0x00ccff;
+        eyeColor = 0x00ffff;
+        glowColor = 0x00aaff;
+    }
+
+    // Materials
+    const armorMaterial = new THREE.MeshStandardMaterial({
+      color: primaryColor,
+      roughness: 0.4,
+      metalness: 0.9
     });
-    const accentMaterial = new THREE.MeshStandardMaterial({
+    const chromeMaterial = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      roughness: 0.1,
+      metalness: 1.0
+    });
+    const glowMaterial = new THREE.MeshStandardMaterial({
       color: accentColor,
       roughness: 0.2,
-      metalness: 0.9,
+      metalness: 0.8,
       emissive: accentColor,
-      emissiveIntensity: 0.3
+      emissiveIntensity: 0.5
+    });
+    const coreMaterial = new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.9
     });
 
-    // Body (torso)
-    const bodyGeometry = new THREE.BoxGeometry(1.2, 1.5, 0.8);
-    this.body = new THREE.Mesh(bodyGeometry, metalMaterial);
+    // === TORSO (Armored Chest) ===
+    const torsoGeometry = new THREE.CapsuleGeometry(0.6, 0.8, 8, 16);
+    this.body = new THREE.Mesh(torsoGeometry, armorMaterial);
     this.body.position.y = 2.5;
+    this.body.scale.set(1.2, 1, 0.7);
     this.body.castShadow = true;
     this.body.userData.part = 'chest';
     this.group.add(this.body);
 
-    // Chest screen
-    const chestScreenGeometry = new THREE.PlaneGeometry(1, 0.8);
-    const chestScreenMaterial = new THREE.MeshBasicMaterial({
-      color: 0x001a1a,
-      transparent: true,
-      opacity: 0.9
-    });
-    this.chestScreen = new THREE.Mesh(chestScreenGeometry, chestScreenMaterial);
-    this.chestScreen.position.set(0, 2.5, 0.41);
-    this.chestScreen.userData.part = 'chest';
-    this.group.add(this.chestScreen);
+    // Chest armor plate
+    const chestPlateGeometry = new THREE.BoxGeometry(1.0, 0.8, 0.15);
+    const chestPlate = new THREE.Mesh(chestPlateGeometry, chromeMaterial);
+    chestPlate.position.set(0, 2.5, 0.35);
+    chestPlate.userData.part = 'chest';
+    this.group.add(chestPlate);
 
-    // Head
-    const headGeometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-    this.head = new THREE.Mesh(headGeometry, metalMaterial);
-    this.head.position.y = 3.7;
+    // Glowing reactor core in chest
+    const coreGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    core.position.set(0, 2.5, 0.45);
+    this.group.add(core);
+
+    // Core ring
+    const coreRingGeometry = new THREE.TorusGeometry(0.25, 0.03, 8, 24);
+    const coreRing = new THREE.Mesh(coreRingGeometry, glowMaterial);
+    coreRing.position.set(0, 2.5, 0.4);
+    this.group.add(coreRing);
+
+    // === HEAD (Armored Helmet) ===
+    const headGeometry = new THREE.SphereGeometry(0.45, 16, 16);
+    this.head = new THREE.Mesh(headGeometry, armorMaterial);
+    this.head.position.y = 3.6;
+    this.head.scale.set(1, 0.9, 0.9);
     this.head.castShadow = true;
     this.head.userData.part = 'head';
     this.group.add(this.head);
 
-    // Head visor/screen
-    const headScreenGeometry = new THREE.PlaneGeometry(0.7, 0.5);
-    const headScreenMaterial = new THREE.MeshBasicMaterial({
-      color: 0x001a1a,
+    // Visor (menacing horizontal slit)
+    const visorGeometry = new THREE.BoxGeometry(0.7, 0.12, 0.1);
+    const visorMaterial = new THREE.MeshBasicMaterial({
+      color: eyeColor,
       transparent: true,
       opacity: 0.9
     });
-    this.headScreen = new THREE.Mesh(headScreenGeometry, headScreenMaterial);
-    this.headScreen.position.set(0, 3.7, 0.46);
-    this.headScreen.userData.part = 'head';
-    this.group.add(this.headScreen);
+    const visor = new THREE.Mesh(visorGeometry, visorMaterial);
+    visor.position.set(0, 3.65, 0.4);
+    visor.userData.part = 'head';
+    this.group.add(visor);
 
-    // Eyes (glowing)
-    const eyeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-    const eyeMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff00ff,
-      emissive: 0xff00ff,
-      emissiveIntensity: 1
-    });
-    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.2, 3.85, 0.4);
-    this.group.add(leftEye);
+    // Head crest/antenna
+    const crestGeometry = new THREE.ConeGeometry(0.08, 0.4, 8);
+    const crest = new THREE.Mesh(crestGeometry, glowMaterial);
+    crest.position.set(0, 4.1, 0);
+    this.group.add(crest);
 
-    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.2, 3.85, 0.4);
-    this.group.add(rightEye);
+    // Side head vents
+    const ventGeometry = new THREE.BoxGeometry(0.08, 0.2, 0.15);
+    const leftVent = new THREE.Mesh(ventGeometry, chromeMaterial);
+    leftVent.position.set(-0.4, 3.5, 0.2);
+    this.group.add(leftVent);
+    const rightVent = new THREE.Mesh(ventGeometry, chromeMaterial);
+    rightVent.position.set(0.4, 3.5, 0.2);
+    this.group.add(rightVent);
 
-    // Antenna
-    const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.5);
-    const antenna = new THREE.Mesh(antennaGeometry, accentMaterial);
-    antenna.position.set(0, 4.35, 0);
-    this.group.add(antenna);
-
-    const antennaTip = new THREE.SphereGeometry(0.08, 16, 16);
-    const tip = new THREE.Mesh(antennaTip, new THREE.MeshBasicMaterial({ color: 0x00ffff }));
-    tip.position.set(0, 4.6, 0);
-    this.group.add(tip);
-
-    // Arms
-    const armGeometry = new THREE.BoxGeometry(0.3, 1.2, 0.3);
-    const leftArm = new THREE.Mesh(armGeometry, metalMaterial);
-    leftArm.position.set(-0.9, 2.3, 0);
-    leftArm.castShadow = true;
-    this.group.add(leftArm);
-
-    const rightArm = new THREE.Mesh(armGeometry, metalMaterial);
-    rightArm.position.set(0.9, 2.3, 0);
-    rightArm.castShadow = true;
-    this.group.add(rightArm);
-
-    // Shoulders
-    const shoulderGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-    const leftShoulder = new THREE.Mesh(shoulderGeometry, accentMaterial);
-    leftShoulder.position.set(-0.75, 3.1, 0);
+    // === SHOULDERS (Armored Pauldrons) ===
+    const shoulderGeometry = new THREE.SphereGeometry(0.25, 12, 12);
+    const leftShoulder = new THREE.Mesh(shoulderGeometry, armorMaterial);
+    leftShoulder.position.set(-0.85, 3.0, 0);
+    leftShoulder.scale.set(1.2, 0.8, 0.8);
     this.group.add(leftShoulder);
 
-    const rightShoulder = new THREE.Mesh(shoulderGeometry, accentMaterial);
-    rightShoulder.position.set(0.75, 3.1, 0);
+    const rightShoulder = new THREE.Mesh(shoulderGeometry, armorMaterial);
+    rightShoulder.position.set(0.85, 3.0, 0);
+    rightShoulder.scale.set(1.2, 0.8, 0.8);
     this.group.add(rightShoulder);
 
-    // Legs
-    const legGeometry = new THREE.BoxGeometry(0.4, 1.5, 0.4);
-    this.leftLeg = new THREE.Mesh(legGeometry, metalMaterial);
-    this.leftLeg.position.set(-0.35, 0.75, 0);
-    this.leftLeg.castShadow = true;
+    // Shoulder glow strips
+    const stripGeometry = new THREE.BoxGeometry(0.3, 0.05, 0.1);
+    const leftStrip = new THREE.Mesh(stripGeometry, glowMaterial);
+    leftStrip.position.set(-0.85, 3.0, 0.2);
+    this.group.add(leftStrip);
+    const rightStrip = new THREE.Mesh(stripGeometry, glowMaterial);
+    rightStrip.position.set(0.85, 3.0, 0.2);
+    this.group.add(rightStrip);
+
+    // === ARMS (Mechanical) ===
+    const upperArmGeometry = new THREE.CylinderGeometry(0.12, 0.15, 0.6, 12);
+    const leftUpperArm = new THREE.Mesh(upperArmGeometry, chromeMaterial);
+    leftUpperArm.position.set(-0.85, 2.5, 0);
+    this.group.add(leftUpperArm);
+    const rightUpperArm = new THREE.Mesh(upperArmGeometry, chromeMaterial);
+    rightUpperArm.position.set(0.85, 2.5, 0);
+    this.group.add(rightUpperArm);
+
+    // Elbow joints
+    const elbowGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const leftElbow = new THREE.Mesh(elbowGeometry, glowMaterial);
+    leftElbow.position.set(-0.85, 2.15, 0);
+    this.group.add(leftElbow);
+    const rightElbow = new THREE.Mesh(elbowGeometry, glowMaterial);
+    rightElbow.position.set(0.85, 2.15, 0);
+    this.group.add(rightElbow);
+
+    // Forearms
+    const forearmGeometry = new THREE.CylinderGeometry(0.1, 0.12, 0.5, 12);
+    const leftForearm = new THREE.Mesh(forearmGeometry, armorMaterial);
+    leftForearm.position.set(-0.85, 1.85, 0);
+    this.group.add(leftForearm);
+    const rightForearm = new THREE.Mesh(forearmGeometry, armorMaterial);
+    rightForearm.position.set(0.85, 1.85, 0);
+    this.group.add(rightForearm);
+
+    // === WAIST ===
+    const waistGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.4, 12);
+    const waist = new THREE.Mesh(waistGeometry, chromeMaterial);
+    waist.position.y = 1.8;
+    this.group.add(waist);
+
+    // === LEGS (Mechanical with Knee Joints) ===
+    const thighGeometry = new THREE.CylinderGeometry(0.18, 0.15, 0.7, 12);
+    const leftThigh = new THREE.Mesh(thighGeometry, armorMaterial);
+    leftThigh.position.set(-0.3, 1.25, 0);
+    leftThigh.userData.part = 'knee';
+    this.group.add(leftThigh);
+    const rightThigh = new THREE.Mesh(thighGeometry, armorMaterial);
+    rightThigh.position.set(0.3, 1.25, 0);
+    rightThigh.userData.part = 'knee';
+    this.group.add(rightThigh);
+
+    // Knee joints (glowing)
+    const kneeGeometry = new THREE.SphereGeometry(0.12, 12, 12);
+    const leftKnee = new THREE.Mesh(kneeGeometry, glowMaterial);
+    leftKnee.position.set(-0.3, 0.85, 0.05);
+    leftKnee.userData.part = 'knee';
+    this.group.add(leftKnee);
+    const rightKnee = new THREE.Mesh(kneeGeometry, glowMaterial);
+    rightKnee.position.set(0.3, 0.85, 0.05);
+    rightKnee.userData.part = 'knee';
+    this.group.add(rightKnee);
+
+    // Lower legs (calves)
+    const calfGeometry = new THREE.CylinderGeometry(0.1, 0.15, 0.7, 12);
+    this.leftLeg = new THREE.Mesh(calfGeometry, chromeMaterial);
+    this.leftLeg.position.set(-0.3, 0.4, 0);
     this.leftLeg.userData.part = 'knee';
     this.group.add(this.leftLeg);
-
-    this.rightLeg = new THREE.Mesh(legGeometry, metalMaterial);
-    this.rightLeg.position.set(0.35, 0.75, 0);
-    this.rightLeg.castShadow = true;
+    this.rightLeg = new THREE.Mesh(calfGeometry, chromeMaterial);
+    this.rightLeg.position.set(0.3, 0.4, 0);
     this.rightLeg.userData.part = 'knee';
     this.group.add(this.rightLeg);
 
-    // Knee screens
-    const kneeScreenGeometry = new THREE.PlaneGeometry(0.35, 0.3);
-    const kneeScreenMaterial = new THREE.MeshBasicMaterial({
-      color: 0x001a1a,
-      transparent: true,
-      opacity: 0.9
-    });
+    // Feet
+    const footGeometry = new THREE.BoxGeometry(0.2, 0.1, 0.35);
+    const leftFoot = new THREE.Mesh(footGeometry, armorMaterial);
+    leftFoot.position.set(-0.3, 0.05, 0.05);
+    this.group.add(leftFoot);
+    const rightFoot = new THREE.Mesh(footGeometry, armorMaterial);
+    rightFoot.position.set(0.3, 0.05, 0.05);
+    this.group.add(rightFoot);
 
-    this.leftKneeScreen = new THREE.Mesh(kneeScreenGeometry, kneeScreenMaterial);
-    this.leftKneeScreen.position.set(-0.35, 0.9, 0.21);
-    this.leftKneeScreen.userData.part = 'knee';
-    this.group.add(this.leftKneeScreen);
-
-    this.rightKneeScreen = new THREE.Mesh(kneeScreenGeometry, kneeScreenMaterial);
-    this.rightKneeScreen.position.set(0.35, 0.9, 0.21);
-    this.rightKneeScreen.userData.part = 'knee';
-    this.group.add(this.rightKneeScreen);
-
-    // Create text sprites for answers
+    // Create answer sprites
     this.createAnswerSprites();
-
-    // Question floating above
     this.createQuestionSprite();
 
-    // Robot glow
-    const glowGeometry = new THREE.SphereGeometry(2, 16, 16);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ccff,
+    // Ambient glow around robot
+    const glowSphereGeometry = new THREE.SphereGeometry(1.8, 16, 16);
+    const glowSphereMaterial = new THREE.MeshBasicMaterial({
+      color: glowColor,
       transparent: true,
-      opacity: 0.05
+      opacity: 0.03
     });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.y = 2.5;
-    this.group.add(glow);
+    const glowSphere = new THREE.Mesh(glowSphereGeometry, glowSphereMaterial);
+    glowSphere.position.y = 2.2;
+    this.group.add(glowSphere);
   }
 
   createTextSprite(text, label, fontSize = 80, bgColor = '#001122', textColor = '#00ff88', borderColor = '#00ffcc') {
