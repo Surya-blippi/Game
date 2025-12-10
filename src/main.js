@@ -5,7 +5,8 @@ import './style.css';
 const gameState = {
   score: 0,
   wave: 1,
-  health: 100,
+  health: 150,
+  maxHealth: 150,
   combo: 1,
   kills: 0,
   isRunning: false,
@@ -533,29 +534,65 @@ function playLaserSound() {
 
 // ==================== ROBOT CLASS ====================
 class Robot {
-  constructor() {
+  constructor(type = null) {
     this.group = new THREE.Group();
 
-    // Position
-    const angle = (Math.random() - 0.5) * Math.PI * 0.8;
-    const distance = 40 + Math.random() * 20;
+    // Robot type (variety)
+    const types = ['normal', 'fast', 'heavy'];
+    this.type = type || types[Math.floor(Math.random() * types.length)];
+
+    // Stats based on type
+    switch (this.type) {
+      case 'fast':
+        this.baseSpeed = 4;
+        this.damage = 10;
+        this.scale = 0.85;
+        this.color = 0xff4444; // Red tint
+        break;
+      case 'heavy':
+        this.baseSpeed = 1.5;
+        this.damage = 25;
+        this.scale = 1.3;
+        this.color = 0x44ff44; // Green tint
+        break;
+      default: // normal
+        this.baseSpeed = 2.5;
+        this.damage = 12;
+        this.scale = 1.0;
+        this.color = 0x2a2a4a; // Default
+    }
+
+    // Position - spawn around player's CURRENT position
+    const playerX = camera ? camera.position.x : 0;
+    const playerZ = camera ? camera.position.z : 0;
+    const angle = Math.random() * Math.PI * 2; // Full 360° around player
+    const distance = 35 + Math.random() * 15; // Spawn distance
     this.group.position.set(
-      Math.sin(angle) * distance,
+      playerX + Math.sin(angle) * distance,
       0,
-      -Math.cos(angle) * distance
+      playerZ - Math.cos(angle) * distance
     );
 
-    this.speed = 2 + gameState.wave * 0.3;
+    // Keep within arena bounds
+    const boundaryLimit = 45;
+    this.group.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.x));
+    this.group.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.z));
+
+    this.speed = this.baseSpeed + gameState.wave * 0.2;
     this.alive = true;
     this.dying = false;
     this.dyingTimer = 0;
     this.walkTime = Math.random() * Math.PI * 2;
+    this.attackCooldown = 0; // Prevent attack spam
 
     // Math question
     this.generateMathQuestion();
 
     // Build robot
     this.build();
+
+    // Apply scale for different robot types
+    this.group.scale.setScalar(this.scale);
 
     // Add to scene
     scene.add(this.group);
@@ -923,18 +960,34 @@ class Robot {
       return;
     }
 
-    // Move towards player
-    const direction = new THREE.Vector3(0, 0, 0).sub(this.group.position);
+    // Reduce attack cooldown
+    if (this.attackCooldown > 0) {
+      this.attackCooldown -= deltaTime;
+    }
+
+    // Get player's actual position (on ground plane)
+    const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+
+    // Move towards player's ACTUAL position
+    const direction = playerPos.clone().sub(this.group.position);
     direction.y = 0;
+    const distanceToPlayer = direction.length();
     direction.normalize();
 
+    // Move robot (speed varies by type)
     this.group.position.add(direction.multiplyScalar(this.speed * deltaTime));
 
-    // Look at player
-    this.group.lookAt(0, this.group.position.y, 0);
+    // Keep robot within arena bounds
+    const boundaryLimit = 45;
+    this.group.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.x));
+    this.group.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.z));
 
-    // Walking animation
-    this.walkTime += deltaTime * 8;
+    // Look at player's actual position
+    this.group.lookAt(playerPos.x, this.group.position.y, playerPos.z);
+
+    // Walking animation (faster for fast type)
+    const walkSpeedMultiplier = this.type === 'fast' ? 1.5 : (this.type === 'heavy' ? 0.7 : 1.0);
+    this.walkTime += deltaTime * 8 * walkSpeedMultiplier;
     const walkOffset = Math.sin(this.walkTime) * 0.15;
     this.leftLeg.rotation.x = walkOffset;
     this.rightLeg.rotation.x = -walkOffset;
@@ -945,15 +998,19 @@ class Robot {
       this.questionSprite.lookAt(camera.position);
     }
 
-    // Attack when close
-    const distanceToPlayer = this.group.position.length();
-    if (distanceToPlayer < 3) {
+    // Attack when close to PLAYER (not origin)
+    const attackRange = this.type === 'heavy' ? 4 : 3;
+    if (distanceToPlayer < attackRange && this.attackCooldown <= 0) {
       this.attackPlayer();
     }
   }
 
   attackPlayer() {
-    gameState.health -= 15;
+    // Set cooldown to prevent attack spam
+    this.attackCooldown = 1.5;
+
+    // Damage based on robot type
+    gameState.health -= this.damage;
     updateHealthBar();
 
     // Damage effect
@@ -967,16 +1024,24 @@ class Robot {
 
     if (gameState.health <= 0) {
       endGame();
+      return;
     }
 
-    // Reset robot position
-    const angle = (Math.random() - 0.5) * Math.PI * 0.8;
-    const distance = 40 + Math.random() * 20;
+    // Respawn robot around player's CURRENT position
+    const playerX = camera.position.x;
+    const playerZ = camera.position.z;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 35 + Math.random() * 15;
     this.group.position.set(
-      Math.sin(angle) * distance,
+      playerX + Math.sin(angle) * distance,
       0,
-      -Math.cos(angle) * distance
+      playerZ - Math.cos(angle) * distance
     );
+
+    // Keep within arena bounds
+    const boundaryLimit = 45;
+    this.group.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.x));
+    this.group.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, this.group.position.z));
   }
 
   checkHit(raycaster) {
@@ -1577,7 +1642,7 @@ function startGame() {
   // Reset game state
   gameState.score = 0;
   gameState.wave = 1;
-  gameState.health = 100;
+  gameState.health = gameState.maxHealth;
   gameState.combo = 1;
   gameState.kills = 0;
   gameState.isRunning = true;
