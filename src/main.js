@@ -1642,6 +1642,15 @@ function onShoot(event) {
         document.getElementById('score').textContent = gameState.score;
         document.getElementById('combo').textContent = `x${gameState.combo}`;
 
+        // Check for wave advancement (every 5 kills)
+        if (gameState.kills % 5 === 0) {
+          gameState.wave++;
+          document.getElementById('wave').textContent = gameState.wave;
+          // Speed up spawns
+          spawnInterval = Math.max(0.8, spawnInterval - 0.2);
+          showWaveAnnouncement(gameState.wave);
+        }
+
       } else {
         // Wrong answer
         gameState.combo = 1;
@@ -1788,14 +1797,6 @@ function animate() {
     if (spawnTimer >= spawnInterval) {
       spawnRobot();
       spawnTimer = 0;
-
-      // Increase difficulty
-      if (robots.length % 5 === 0 && robots.length > 0) {
-        gameState.wave++;
-        document.getElementById('wave').textContent = gameState.wave;
-        spawnInterval = Math.max(0.8, spawnInterval - 0.15);
-        showWaveAnnouncement(gameState.wave);
-      }
     }
 
     // Update robots
