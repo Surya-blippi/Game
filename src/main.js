@@ -33,6 +33,18 @@ let lastTouchX = 0;
 let lastTouchY = 0;
 const touchSensitivity = 0.005;
 
+// Player movement
+const moveSpeed = 8;
+const keys = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false
+};
+let joystickActive = false;
+let joystickX = 0;
+let joystickY = 0;
+
 // Gun
 let gun;
 let gunGroup;
@@ -81,6 +93,10 @@ function init() {
 
   // Event listeners
   window.addEventListener('resize', onWindowResize);
+
+  // Keyboard controls for movement (both desktop and mobile with keyboard)
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
 
   if (isMobile) {
     // Mobile touch events are handled via UI elements
@@ -1176,6 +1192,9 @@ function createUI() {
   const mobileControls = document.createElement('div');
   mobileControls.id = 'mobile-controls';
   mobileControls.innerHTML = `
+    <div id="joystick-container">
+      <div id="joystick-knob"></div>
+    </div>
     <div id="look-area"></div>
     <div id="fire-button"><span>FIRE</span></div>
   `;
@@ -1189,7 +1208,7 @@ function createUI() {
   // Mobile hint
   const mobileHint = document.createElement('div');
   mobileHint.id = 'mobile-hint';
-  mobileHint.textContent = 'Drag to aim • Tap FIRE to shoot';
+  mobileHint.textContent = 'Left: Move • Right: Aim • Tap FIRE to shoot';
   app.appendChild(mobileHint);
 
   // Event listeners
@@ -1200,6 +1219,7 @@ function createUI() {
   if (isMobile) {
     const lookArea = document.getElementById('look-area');
     const fireButton = document.getElementById('fire-button');
+    const joystickContainer = document.getElementById('joystick-container');
 
     // Touch look controls
     lookArea.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -1209,6 +1229,11 @@ function createUI() {
     // Fire button
     fireButton.addEventListener('touchstart', onFireButtonPress, { passive: false });
     fireButton.addEventListener('touchend', onFireButtonRelease, { passive: false });
+
+    // Joystick controls
+    joystickContainer.addEventListener('touchstart', onJoystickStart, { passive: false });
+    joystickContainer.addEventListener('touchmove', onJoystickMove, { passive: false });
+    joystickContainer.addEventListener('touchend', onJoystickEnd, { passive: false });
   }
 }
 
@@ -1265,6 +1290,63 @@ function onFireButtonPress(event) {
 
 function onFireButtonRelease(event) {
   event.preventDefault();
+}
+
+// Joystick touch handlers
+let joystickCenterX = 0;
+let joystickCenterY = 0;
+const joystickMaxDistance = 35;
+
+function onJoystickStart(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!gameState.isRunning) return;
+
+  const container = document.getElementById('joystick-container');
+  const rect = container.getBoundingClientRect();
+  joystickCenterX = rect.left + rect.width / 2;
+  joystickCenterY = rect.top + rect.height / 2;
+  joystickActive = true;
+}
+
+function onJoystickMove(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!gameState.isRunning || !joystickActive) return;
+
+  const touch = event.touches[0];
+
+  // Calculate offset from center
+  let deltaX = touch.clientX - joystickCenterX;
+  let deltaY = touch.clientY - joystickCenterY;
+
+  // Clamp to max distance
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  if (distance > joystickMaxDistance) {
+    deltaX = (deltaX / distance) * joystickMaxDistance;
+    deltaY = (deltaY / distance) * joystickMaxDistance;
+  }
+
+  // Update joystick knob position
+  const knob = document.getElementById('joystick-knob');
+  knob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+  // Update joystick values (normalized -1 to 1)
+  joystickX = deltaX / joystickMaxDistance;
+  joystickY = deltaY / joystickMaxDistance;
+}
+
+function onJoystickEnd(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  joystickActive = false;
+  joystickX = 0;
+  joystickY = 0;
+
+  // Reset knob position
+  const knob = document.getElementById('joystick-knob');
+  knob.style.transform = 'translate(0px, 0px)';
 }
 
 function updateHealthBar() {
@@ -1459,10 +1541,11 @@ function startGame() {
     renderer.domElement.requestPointerLock();
   }
 
-  // Reset camera rotation
+  // Reset camera rotation and position
   yaw = 0;
   pitch = 0;
   camera.rotation.set(0, 0, 0);
+  camera.position.set(0, 2, 0); // Reset player position to center
 
   // Reset game state
   gameState.score = 0;
@@ -1546,6 +1629,9 @@ function animate() {
   }
 
   if (gameState.isRunning) {
+    // Update player movement
+    updatePlayerMovement(deltaTime);
+
     // Spawn timer
     spawnTimer += deltaTime;
     if (spawnTimer >= spawnInterval) {
@@ -1628,6 +1714,88 @@ function onMouseMove(event) {
   camera.rotation.order = 'YXZ';
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
+}
+
+// ==================== KEYBOARD CONTROLS ====================
+function onKeyDown(event) {
+  if (!gameState.isRunning) return;
+
+  switch (event.code) {
+    case 'KeyW':
+    case 'ArrowUp':
+      keys.forward = true;
+      break;
+    case 'KeyS':
+    case 'ArrowDown':
+      keys.backward = true;
+      break;
+    case 'KeyA':
+    case 'ArrowLeft':
+      keys.left = true;
+      break;
+    case 'KeyD':
+    case 'ArrowRight':
+      keys.right = true;
+      break;
+  }
+}
+
+function onKeyUp(event) {
+  switch (event.code) {
+    case 'KeyW':
+    case 'ArrowUp':
+      keys.forward = false;
+      break;
+    case 'KeyS':
+    case 'ArrowDown':
+      keys.backward = false;
+      break;
+    case 'KeyA':
+    case 'ArrowLeft':
+      keys.left = false;
+      break;
+    case 'KeyD':
+    case 'ArrowRight':
+      keys.right = false;
+      break;
+  }
+}
+
+// ==================== PLAYER MOVEMENT ====================
+function updatePlayerMovement(deltaTime) {
+  // Calculate movement direction based on camera orientation
+  const moveX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + joystickX;
+  const moveZ = (keys.forward ? 1 : 0) - (keys.backward ? 1 : 0) - joystickY;
+
+  if (moveX === 0 && moveZ === 0) return;
+
+  // Get forward and right vectors from camera
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  const right = new THREE.Vector3();
+  right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+  right.normalize();
+
+  // Calculate movement vector
+  const movement = new THREE.Vector3();
+  movement.addScaledVector(forward, moveZ);
+  movement.addScaledVector(right, moveX);
+  movement.normalize();
+  movement.multiplyScalar(moveSpeed * deltaTime);
+
+  // Apply movement to camera
+  camera.position.add(movement);
+
+  // Keep player within bounds (arena limits)
+  const boundaryLimit = 35;
+  camera.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, camera.position.x));
+  camera.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, camera.position.z));
+
+  // Reset y position (stay on ground)
+  camera.position.y = 2;
 }
 
 // ==================== INITIALIZE ====================

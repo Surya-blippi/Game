@@ -615,15 +615,43 @@ canvas {
   display: block;
 }
 
-/* Look area (left side for aiming) */
+/* Look area (right side top for aiming) */
 #look-area {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
-  width: 60%;
-  height: 100%;
+  width: 50%;
+  height: 60%;
   pointer-events: all;
   touch-action: none;
+}
+
+/* Virtual Joystick (left side for movement) */
+#joystick-container {
+  position: absolute;
+  left: 30px;
+  bottom: 30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(0, 240, 255, 0.5);
+  pointer-events: all;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#joystick-knob {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.9) 0%, rgba(0, 150, 200, 0.8) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+  position: absolute;
+  transition: transform 0.05s ease-out;
 }
 
 /* Fire button (right side) */
