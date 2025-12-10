@@ -1320,6 +1320,7 @@ function createUI() {
       <div id="joystick-knob"></div>
     </div>
     <div id="look-area"></div>
+    <div id="jump-button">↑</div>
     <div id="fire-button"><span>FIRE</span></div>
   `;
   app.appendChild(mobileControls);
@@ -1332,7 +1333,7 @@ function createUI() {
   // Mobile hint
   const mobileHint = document.createElement('div');
   mobileHint.id = 'mobile-hint';
-  mobileHint.textContent = 'Left: Move • Right: Aim • Tap FIRE to shoot';
+  mobileHint.innerHTML = '🕹️ Move • 👆 Aim • ⬆️ Jump • 🔥 Fire';
   app.appendChild(mobileHint);
 
   // Event listeners
@@ -1344,6 +1345,7 @@ function createUI() {
     const lookArea = document.getElementById('look-area');
     const fireButton = document.getElementById('fire-button');
     const joystickContainer = document.getElementById('joystick-container');
+    const jumpButton = document.getElementById('jump-button');
 
     // Touch look controls
     lookArea.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -1358,6 +1360,10 @@ function createUI() {
     joystickContainer.addEventListener('touchstart', onJoystickStart, { passive: false });
     joystickContainer.addEventListener('touchmove', onJoystickMove, { passive: false });
     joystickContainer.addEventListener('touchend', onJoystickEnd, { passive: false });
+
+    // Jump button
+    jumpButton.addEventListener('touchstart', onJumpButtonPress, { passive: false });
+    jumpButton.addEventListener('touchend', onJumpButtonRelease, { passive: false });
   }
 }
 
@@ -1419,7 +1425,7 @@ function onFireButtonRelease(event) {
 // Joystick touch handlers
 let joystickCenterX = 0;
 let joystickCenterY = 0;
-const joystickMaxDistance = 35;
+const joystickMaxDistance = 45; // Larger for bigger joystick
 
 function onJoystickStart(event) {
   event.preventDefault();
@@ -1471,6 +1477,24 @@ function onJoystickEnd(event) {
   // Reset knob position
   const knob = document.getElementById('joystick-knob');
   knob.style.transform = 'translate(0px, 0px)';
+}
+
+// Jump button handlers
+function onJumpButtonPress(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!gameState.isRunning) return;
+
+  // Trigger jump if grounded
+  if (isGrounded) {
+    velocityY = jumpForce;
+    isGrounded = false;
+  }
+}
+
+function onJumpButtonRelease(event) {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function updateHealthBar() {
