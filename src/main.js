@@ -1,5 +1,11 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import './style.css';
+
+// GLTF Model references
+let robotModel = null;
+let arenaModel = null;
+const gltfLoader = new GLTFLoader();
 
 // ==================== GAME STATE ====================
 const gameState = {
@@ -163,6 +169,41 @@ function init() {
 
 // ==================== ENVIRONMENT ====================
 function createEnvironment() {
+  // Load arena model if available
+  gltfLoader.load(
+    '/models/arena.glb',
+    (gltf) => {
+      arenaModel = gltf.scene;
+      arenaModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      // Scale and position arena as needed
+      arenaModel.scale.set(10, 10, 10);
+      arenaModel.position.y = 0;
+      scene.add(arenaModel);
+      console.log('✅ Arena model loaded!');
+    },
+    (progress) => {
+      console.log('Loading arena:', Math.round((progress.loaded / progress.total) * 100) + '%');
+    },
+    (error) => {
+      console.warn('Could not load arena.glb, using procedural environment:', error);
+      createProceduralEnvironment();
+    }
+  );
+
+  // Add fog for atmosphere
+  scene.fog = new THREE.FogExp2(0x0a0a12, 0.012);
+
+  // Ambient particles
+  createAmbientParticles();
+}
+
+// Fallback procedural environment if GLTF fails
+function createProceduralEnvironment() {
   // Industrial metal floor with panels
   const floorGeometry = new THREE.PlaneGeometry(120, 120, 40, 40);
   const floorMaterial = new THREE.MeshStandardMaterial({
@@ -185,12 +226,6 @@ function createEnvironment() {
 
   // Industrial backdrop
   createIndustrialBackdrop();
-
-  // Ambient particles (sparks and dust)
-  createAmbientParticles();
-
-  // Add fog for atmosphere
-  scene.fog = new THREE.FogExp2(0x0a0a12, 0.015);
 }
 
 function createArenaBoundaries() {
@@ -782,226 +817,153 @@ class Robot {
   }
 
   build() {
-    // Type-based color schemes
-    let primaryColor, accentColor, eyeColor, glowColor;
+    // Type-based color tint for the model
+    let tintColor;
     switch (this.type) {
       case 'fast':
-        primaryColor = 0x4a2020;
-        accentColor = 0xff4444;
-        eyeColor = 0xff0000;
-        glowColor = 0xff3333;
+        tintColor = new THREE.Color(0xff6666);
         break;
       case 'heavy':
-        primaryColor = 0x204a20;
-        accentColor = 0x44ff44;
-        eyeColor = 0x00ff00;
-        glowColor = 0x33ff33;
+        tintColor = new THREE.Color(0x66ff66);
         break;
-      default: // normal
-        primaryColor = 0x202a4a;
-        accentColor = 0x00ccff;
-        eyeColor = 0x00ffff;
-        glowColor = 0x00aaff;
+      default:
+        tintColor = new THREE.Color(0x6666ff);
     }
 
-    // Materials
-    const armorMaterial = new THREE.MeshStandardMaterial({
-      color: primaryColor,
-      roughness: 0.4,
-      metalness: 0.9
-    });
-    const chromeMaterial = new THREE.MeshStandardMaterial({
-      color: 0x888888,
-      roughness: 0.1,
-      metalness: 1.0
-    });
-    const glowMaterial = new THREE.MeshStandardMaterial({
-      color: accentColor,
-      roughness: 0.2,
-      metalness: 0.8,
-      emissive: accentColor,
-      emissiveIntensity: 0.5
-    });
-    const coreMaterial = new THREE.MeshBasicMaterial({
-      color: glowColor,
-      transparent: true,
-      opacity: 0.9
-    });
+    // Load GLTF model
+    gltfLoader.load(
+      '/models/robot.glb',
+      (gltf) => {
+        this.model = gltf.scene.clone();
 
-    // === TORSO (Armored Chest) ===
-    const torsoGeometry = new THREE.CapsuleGeometry(0.6, 0.8, 8, 16);
-    this.body = new THREE.Mesh(torsoGeometry, armorMaterial);
-    this.body.position.y = 2.5;
-    this.body.scale.set(1.2, 1, 0.7);
-    this.body.castShadow = true;
-    this.body.userData.part = 'chest';
-    this.group.add(this.body);
+        // Apply color tint and shadows to model
+        this.model.traverse((child) => {
+          if (child.isMesh) {
+            // Clone material to avoid affecting other robots
+            child.material = child.material.clone();
+            // Tint the model based on type
+            if (child.material.color) {
+              child.material.color.lerp(tintColor, 0.3);
+            }
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
 
-    // Chest armor plate
-    const chestPlateGeometry = new THREE.BoxGeometry(1.0, 0.8, 0.15);
-    const chestPlate = new THREE.Mesh(chestPlateGeometry, chromeMaterial);
-    chestPlate.position.set(0, 2.5, 0.35);
-    chestPlate.userData.part = 'chest';
-    this.group.add(chestPlate);
+        // Scale model appropriately (adjust as needed)
+        this.model.scale.set(1.5, 1.5, 1.5);
+        this.model.position.y = 0;
+        this.group.add(this.model);
 
-    // Glowing reactor core in chest
-    const coreGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    core.position.set(0, 2.5, 0.45);
-    this.group.add(core);
+        // Store reference for animations
+        this.mixer = gltf.animations.length > 0 ?
+          new THREE.AnimationMixer(this.model) : null;
+        if (this.mixer && gltf.animations[0]) {
+          const action = this.mixer.clipAction(gltf.animations[0]);
+          action.play();
+        }
+      },
+      undefined,
+      (error) => {
+        console.warn('Robot model failed to load, using fallback:', error);
+        this.buildProceduralFallback();
+      }
+    );
 
-    // Core ring
-    const coreRingGeometry = new THREE.TorusGeometry(0.25, 0.03, 8, 24);
-    const coreRing = new THREE.Mesh(coreRingGeometry, glowMaterial);
-    coreRing.position.set(0, 2.5, 0.4);
-    this.group.add(coreRing);
-
-    // === HEAD (Armored Helmet) ===
-    const headGeometry = new THREE.SphereGeometry(0.45, 16, 16);
-    this.head = new THREE.Mesh(headGeometry, armorMaterial);
-    this.head.position.y = 3.6;
-    this.head.scale.set(1, 0.9, 0.9);
-    this.head.castShadow = true;
-    this.head.userData.part = 'head';
-    this.group.add(this.head);
-
-    // Visor (menacing horizontal slit)
-    const visorGeometry = new THREE.BoxGeometry(0.7, 0.12, 0.1);
-    const visorMaterial = new THREE.MeshBasicMaterial({
-      color: eyeColor,
-      transparent: true,
-      opacity: 0.9
-    });
-    const visor = new THREE.Mesh(visorGeometry, visorMaterial);
-    visor.position.set(0, 3.65, 0.4);
-    visor.userData.part = 'head';
-    this.group.add(visor);
-
-    // Head crest/antenna
-    const crestGeometry = new THREE.ConeGeometry(0.08, 0.4, 8);
-    const crest = new THREE.Mesh(crestGeometry, glowMaterial);
-    crest.position.set(0, 4.1, 0);
-    this.group.add(crest);
-
-    // Side head vents
-    const ventGeometry = new THREE.BoxGeometry(0.08, 0.2, 0.15);
-    const leftVent = new THREE.Mesh(ventGeometry, chromeMaterial);
-    leftVent.position.set(-0.4, 3.5, 0.2);
-    this.group.add(leftVent);
-    const rightVent = new THREE.Mesh(ventGeometry, chromeMaterial);
-    rightVent.position.set(0.4, 3.5, 0.2);
-    this.group.add(rightVent);
-
-    // === SHOULDERS (Armored Pauldrons) ===
-    const shoulderGeometry = new THREE.SphereGeometry(0.25, 12, 12);
-    const leftShoulder = new THREE.Mesh(shoulderGeometry, armorMaterial);
-    leftShoulder.position.set(-0.85, 3.0, 0);
-    leftShoulder.scale.set(1.2, 0.8, 0.8);
-    this.group.add(leftShoulder);
-
-    const rightShoulder = new THREE.Mesh(shoulderGeometry, armorMaterial);
-    rightShoulder.position.set(0.85, 3.0, 0);
-    rightShoulder.scale.set(1.2, 0.8, 0.8);
-    this.group.add(rightShoulder);
-
-    // Shoulder glow strips
-    const stripGeometry = new THREE.BoxGeometry(0.3, 0.05, 0.1);
-    const leftStrip = new THREE.Mesh(stripGeometry, glowMaterial);
-    leftStrip.position.set(-0.85, 3.0, 0.2);
-    this.group.add(leftStrip);
-    const rightStrip = new THREE.Mesh(stripGeometry, glowMaterial);
-    rightStrip.position.set(0.85, 3.0, 0.2);
-    this.group.add(rightStrip);
-
-    // === ARMS (Mechanical) ===
-    const upperArmGeometry = new THREE.CylinderGeometry(0.12, 0.15, 0.6, 12);
-    const leftUpperArm = new THREE.Mesh(upperArmGeometry, chromeMaterial);
-    leftUpperArm.position.set(-0.85, 2.5, 0);
-    this.group.add(leftUpperArm);
-    const rightUpperArm = new THREE.Mesh(upperArmGeometry, chromeMaterial);
-    rightUpperArm.position.set(0.85, 2.5, 0);
-    this.group.add(rightUpperArm);
-
-    // Elbow joints
-    const elbowGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-    const leftElbow = new THREE.Mesh(elbowGeometry, glowMaterial);
-    leftElbow.position.set(-0.85, 2.15, 0);
-    this.group.add(leftElbow);
-    const rightElbow = new THREE.Mesh(elbowGeometry, glowMaterial);
-    rightElbow.position.set(0.85, 2.15, 0);
-    this.group.add(rightElbow);
-
-    // Forearms
-    const forearmGeometry = new THREE.CylinderGeometry(0.1, 0.12, 0.5, 12);
-    const leftForearm = new THREE.Mesh(forearmGeometry, armorMaterial);
-    leftForearm.position.set(-0.85, 1.85, 0);
-    this.group.add(leftForearm);
-    const rightForearm = new THREE.Mesh(forearmGeometry, armorMaterial);
-    rightForearm.position.set(0.85, 1.85, 0);
-    this.group.add(rightForearm);
-
-    // === WAIST ===
-    const waistGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.4, 12);
-    const waist = new THREE.Mesh(waistGeometry, chromeMaterial);
-    waist.position.y = 1.8;
-    this.group.add(waist);
-
-    // === LEGS (Mechanical with Knee Joints) ===
-    const thighGeometry = new THREE.CylinderGeometry(0.18, 0.15, 0.7, 12);
-    const leftThigh = new THREE.Mesh(thighGeometry, armorMaterial);
-    leftThigh.position.set(-0.3, 1.25, 0);
-    leftThigh.userData.part = 'knee';
-    this.group.add(leftThigh);
-    const rightThigh = new THREE.Mesh(thighGeometry, armorMaterial);
-    rightThigh.position.set(0.3, 1.25, 0);
-    rightThigh.userData.part = 'knee';
-    this.group.add(rightThigh);
-
-    // Knee joints (glowing)
-    const kneeGeometry = new THREE.SphereGeometry(0.12, 12, 12);
-    const leftKnee = new THREE.Mesh(kneeGeometry, glowMaterial);
-    leftKnee.position.set(-0.3, 0.85, 0.05);
-    leftKnee.userData.part = 'knee';
-    this.group.add(leftKnee);
-    const rightKnee = new THREE.Mesh(kneeGeometry, glowMaterial);
-    rightKnee.position.set(0.3, 0.85, 0.05);
-    rightKnee.userData.part = 'knee';
-    this.group.add(rightKnee);
-
-    // Lower legs (calves)
-    const calfGeometry = new THREE.CylinderGeometry(0.1, 0.15, 0.7, 12);
-    this.leftLeg = new THREE.Mesh(calfGeometry, chromeMaterial);
-    this.leftLeg.position.set(-0.3, 0.4, 0);
-    this.leftLeg.userData.part = 'knee';
-    this.group.add(this.leftLeg);
-    this.rightLeg = new THREE.Mesh(calfGeometry, chromeMaterial);
-    this.rightLeg.position.set(0.3, 0.4, 0);
-    this.rightLeg.userData.part = 'knee';
-    this.group.add(this.rightLeg);
-
-    // Feet
-    const footGeometry = new THREE.BoxGeometry(0.2, 0.1, 0.35);
-    const leftFoot = new THREE.Mesh(footGeometry, armorMaterial);
-    leftFoot.position.set(-0.3, 0.05, 0.05);
-    this.group.add(leftFoot);
-    const rightFoot = new THREE.Mesh(footGeometry, armorMaterial);
-    rightFoot.position.set(0.3, 0.05, 0.05);
-    this.group.add(rightFoot);
+    // Create invisible hitboxes for shooting detection (always needed)
+    this.createHitboxes();
 
     // Create answer sprites
     this.createAnswerSprites();
     this.createQuestionSprite();
+  }
 
-    // Ambient glow around robot
-    const glowSphereGeometry = new THREE.SphereGeometry(1.8, 16, 16);
-    const glowSphereMaterial = new THREE.MeshBasicMaterial({
-      color: glowColor,
+  createHitboxes() {
+    // Invisible material for hitboxes
+    const hitboxMaterial = new THREE.MeshBasicMaterial({
+      visible: false,
       transparent: true,
-      opacity: 0.03
+      opacity: 0
     });
-    const glowSphere = new THREE.Mesh(glowSphereGeometry, glowSphereMaterial);
-    glowSphere.position.y = 2.2;
-    this.group.add(glowSphere);
+
+    // HEAD hitbox (top section)
+    const headHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.8, 0.8),
+      hitboxMaterial
+    );
+    headHitbox.position.y = 3.5;
+    headHitbox.userData.part = 'head';
+    this.head = headHitbox;
+    this.group.add(headHitbox);
+
+    // CHEST hitbox (middle section)
+    const chestHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 1.2, 0.8),
+      hitboxMaterial
+    );
+    chestHitbox.position.y = 2.3;
+    chestHitbox.userData.part = 'chest';
+    this.body = chestHitbox;
+    this.group.add(chestHitbox);
+
+    // KNEE/LEGS hitbox (lower section)
+    const legHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(1.0, 1.5, 0.6),
+      hitboxMaterial
+    );
+    legHitbox.position.y = 0.9;
+    legHitbox.userData.part = 'knee';
+    this.leftLeg = legHitbox;
+    this.rightLeg = legHitbox;
+    this.group.add(legHitbox);
+  }
+
+  buildProceduralFallback() {
+    // Fallback procedural robot if GLTF fails
+    const color = this.type === 'fast' ? 0xff4444 :
+      this.type === 'heavy' ? 0x44ff44 : 0x4444ff;
+
+    const material = new THREE.MeshStandardMaterial({
+      color: color,
+      roughness: 0.4,
+      metalness: 0.8
+    });
+
+    // Simple body
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.5, 1, 8, 16),
+      material
+    );
+    body.position.y = 2.3;
+    this.group.add(body);
+
+    // Simple head
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4, 16, 16),
+      material
+    );
+    head.position.y = 3.5;
+    this.group.add(head);
+
+    // Simple legs
+    const legMaterial = new THREE.MeshStandardMaterial({
+      color: 0x666666,
+      roughness: 0.6,
+      metalness: 0.5
+    });
+    const leftLeg = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8),
+      legMaterial
+    );
+    leftLeg.position.set(-0.3, 0.75, 0);
+    this.group.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8),
+      legMaterial
+    );
+    rightLeg.position.set(0.3, 0.75, 0);
+    this.group.add(rightLeg);
   }
 
   createTextSprite(text, label, fontSize = 80, bgColor = '#001122', textColor = '#00ff88', borderColor = '#00ffcc') {
