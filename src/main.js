@@ -75,6 +75,26 @@ let muzzleLight;
 
 // Audio
 let audioContext;
+let gunSoundBuffer = null;
+
+// Load gun sound
+async function loadGunSound() {
+  try {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const response = await fetch('/gun.wav');
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      gunSoundBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      console.log('🔫 Gun sound loaded!');
+    } else {
+      console.log('Gun.wav not found, using synthesized sound');
+    }
+  } catch (e) {
+    console.log('Could not load gun.wav, using synthesized sound');
+  }
+}
 
 // ==================== INIT ====================
 function init() {
@@ -133,6 +153,9 @@ function init() {
 
   // Create UI (includes mobile controls)
   createUI();
+
+  // Load gun sound (async, will use fallback if not available)
+  loadGunSound();
 
   // Start render loop (even before game starts, for background)
   animate();
@@ -489,7 +512,24 @@ function playLaserSound() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
 
-  // Create multiple oscillators for rich laser sound
+  // Resume audio context if suspended (mobile browser requirement)
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+
+  // If gun.wav is loaded, use it
+  if (gunSoundBuffer) {
+    const source = audioContext.createBufferSource();
+    source.buffer = gunSoundBuffer;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 0.5;
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.start(0);
+    return;
+  }
+
+  // Fallback: Create synthesized laser sound
   const now = audioContext.currentTime;
 
   // Main laser "pew" sound
@@ -1810,6 +1850,11 @@ function onMouseMove(event) {
 
 // ==================== KEYBOARD CONTROLS ====================
 function onKeyDown(event) {
+  // Prevent spacebar and arrows from scrolling/triggering buttons
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+    event.preventDefault();
+  }
+
   if (!gameState.isRunning) return;
 
   switch (event.code) {
