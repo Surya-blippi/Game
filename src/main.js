@@ -227,8 +227,8 @@ function createEnvironment() {
         }
       });
       // Scale and position (adjust these values for your model!)
-      arenaModel.scale.set(1, 1, 1);
-      arenaModel.position.set(0, 0, 0);
+      arenaModel.scale.set(0.2, 0.2, 0.2); // Model is 500 units, scaling to 100
+      arenaModel.position.set(0, -1, 0); // Lower slightly to avoid z-fighting with grid
       scene.add(arenaModel);
       console.log('✅ Arena GLTF model loaded and added to scene!');
     },
@@ -901,8 +901,17 @@ class Robot {
         }
       });
 
+      // Hide procedural visual parts (but KEEP hitboxes active!)
+      this.group.children.forEach(child => {
+        // Hitboxes have material.visible = false. We skip them (keep them active).
+        // Visual parts have material.visible = true. We hide them.
+        if (child.isMesh && child.material && child.material.visible !== false) {
+          child.visible = false;
+        }
+      });
+
       // Scale and position (adjust for your model!)
-      this.model.scale.set(0.02, 0.02, 0.02); // Many models are very large
+      this.model.scale.set(6, 6, 6); // Model is 0.7 units, scaling to ~4.2
       this.model.position.y = 0;
       this.group.add(this.model);
     }
