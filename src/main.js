@@ -169,7 +169,7 @@ function init() {
 
 // ==================== ENVIRONMENT ====================
 function createEnvironment() {
-  // ALWAYS create procedural environment first (immediate visibility)
+  // Create procedural environment
   createProceduralEnvironment();
 
   // Add fog for atmosphere
@@ -177,33 +177,6 @@ function createEnvironment() {
 
   // Ambient particles
   createAmbientParticles();
-
-  // Then TRY to load arena GLTF model as enhancement/replacement
-  gltfLoader.load(
-    '/models/arena.glb',
-    (gltf) => {
-      arenaModel = gltf.scene;
-      arenaModel.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-      // Scale and position arena as needed (adjust these values!)
-      arenaModel.scale.set(5, 5, 5);
-      arenaModel.position.y = 0;
-      scene.add(arenaModel);
-      console.log('✅ Arena GLTF model loaded and added!');
-    },
-    (progress) => {
-      if (progress.total > 0) {
-        console.log('Loading arena:', Math.round((progress.loaded / progress.total) * 100) + '%');
-      }
-    },
-    (error) => {
-      console.log('ℹ️ Using procedural arena (GLTF not loaded):', error.message || error);
-    }
-  );
 }
 
 // Fallback procedural environment if GLTF fails
@@ -821,68 +794,15 @@ class Robot {
   }
 
   build() {
-    // ALWAYS create hitboxes for shooting detection
+    // Create hitboxes for shooting detection
     this.createHitboxes();
 
-    // ALWAYS create procedural fallback first (immediate visibility)
+    // Create procedural robot (immediate visibility)
     this.buildProceduralFallback();
 
     // Create answer sprites
     this.createAnswerSprites();
     this.createQuestionSprite();
-
-    // Type-based color tint for the GLTF model (if it loads)
-    let tintColor;
-    switch (this.type) {
-      case 'fast':
-        tintColor = new THREE.Color(0xff6666);
-        break;
-      case 'heavy':
-        tintColor = new THREE.Color(0x66ff66);
-        break;
-      default:
-        tintColor = new THREE.Color(0x6666ff);
-    }
-
-    // Then TRY to load GLTF model as enhancement
-    gltfLoader.load(
-      '/models/robot.glb',
-      (gltf) => {
-        this.model = gltf.scene.clone();
-
-        // Apply color tint and shadows to model
-        this.model.traverse((child) => {
-          if (child.isMesh) {
-            // Clone material to avoid affecting other robots
-            if (child.material) {
-              child.material = child.material.clone();
-              if (child.material.color) {
-                child.material.color.lerp(tintColor, 0.3);
-              }
-            }
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
-        // Scale model appropriately (adjust as needed)
-        this.model.scale.set(1.5, 1.5, 1.5);
-        this.model.position.y = 0;
-        this.group.add(this.model);
-        console.log('✅ Robot GLTF model loaded!');
-
-        // Store reference for animations
-        if (gltf.animations && gltf.animations.length > 0) {
-          this.mixer = new THREE.AnimationMixer(this.model);
-          const action = this.mixer.clipAction(gltf.animations[0]);
-          action.play();
-        }
-      },
-      undefined,
-      (error) => {
-        console.log('ℹ️ Using procedural robot (GLTF not loaded)');
-      }
-    );
   }
 
   createHitboxes() {
