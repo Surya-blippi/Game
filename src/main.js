@@ -1,11 +1,47 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import './style.css';
 
 // GLTF Model references
 let robotModel = null;
 let arenaModel = null;
+let robotModelLoaded = false;
+
+// Setup loaders
 const gltfLoader = new GLTFLoader();
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+gltfLoader.setDRACOLoader(dracoLoader);
+
+// Model paths (Vite serves public folder at root)
+const ARENA_MODEL_PATH = '/models/arena.glb';
+const ROBOT_MODEL_PATH = '/models/robot.glb';
+
+// Pre-load robot model for cloning
+function preloadRobotModel() {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(
+      ROBOT_MODEL_PATH,
+      (gltf) => {
+        robotModel = gltf.scene;
+        robotModelLoaded = true;
+        console.log('✅ Robot model pre-loaded successfully!');
+        resolve(gltf);
+      },
+      (xhr) => {
+        if (xhr.total > 0) {
+          console.log(`Robot loading: ${Math.round(xhr.loaded / xhr.total * 100)}%`);
+        }
+      },
+      (error) => {
+        console.error('❌ Failed to load robot model:', error);
+        robotModelLoaded = false;
+        reject(error);
+      }
+    );
+  });
+}
 
 // ==================== GAME STATE ====================
 const gameState = {
@@ -169,7 +205,7 @@ function init() {
 
 // ==================== ENVIRONMENT ====================
 function createEnvironment() {
-  // Create procedural environment
+  // Always create procedural environment first (immediate visibility)
   createProceduralEnvironment();
 
   // Add fog for atmosphere
@@ -177,6 +213,37 @@ function createEnvironment() {
 
   // Ambient particles
   createAmbientParticles();
+
+  // Try to load arena GLTF model
+  console.log('📦 Attempting to load arena model from:', ARENA_MODEL_PATH);
+  gltfLoader.load(
+    ARENA_MODEL_PATH,
+    (gltf) => {
+      arenaModel = gltf.scene;
+      arenaModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      // Scale and position (adjust these values for your model!)
+      arenaModel.scale.set(1, 1, 1);
+      arenaModel.position.set(0, 0, 0);
+      scene.add(arenaModel);
+      console.log('✅ Arena GLTF model loaded and added to scene!');
+    },
+    (xhr) => {
+      if (xhr.total > 0) {
+        console.log(`Arena loading: ${Math.round(xhr.loaded / xhr.total * 100)}%`);
+      }
+    },
+    (error) => {
+      console.error('❌ Failed to load arena model:', error);
+    }
+  );
+
+  // Pre-load robot model
+  preloadRobotModel().catch(e => console.log('Robot preload failed, will use procedural'));
 }
 
 // Fallback procedural environment if GLTF fails
@@ -797,12 +864,48 @@ class Robot {
     // Create hitboxes for shooting detection
     this.createHitboxes();
 
-    // Create procedural robot (immediate visibility)
+    // Create procedural robot first (immediate visibility)
     this.buildProceduralFallback();
 
     // Create answer sprites
     this.createAnswerSprites();
     this.createQuestionSprite();
+
+    // If GLTF model is preloaded, clone and use it
+    if (robotModelLoaded && robotModel) {
+      // Type-based color tint
+      let tintColor;
+      switch (this.type) {
+        case 'fast':
+          tintColor = new THREE.Color(0xff4444);
+          break;
+        case 'heavy':
+          tintColor = new THREE.Color(0x44ff44);
+          break;
+        default:
+          tintColor = new THREE.Color(0x4444ff);
+      }
+
+      // Clone the preloaded model
+      this.model = robotModel.clone();
+
+      // Apply color tint
+      this.model.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.material = child.material.clone();
+          if (child.material.color) {
+            child.material.color.lerp(tintColor, 0.3);
+          }
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      // Scale and position (adjust for your model!)
+      this.model.scale.set(0.02, 0.02, 0.02); // Many models are very large
+      this.model.position.y = 0;
+      this.group.add(this.model);
+    }
   }
 
   createHitboxes() {
