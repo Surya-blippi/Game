@@ -35,15 +35,34 @@ const touchSensitivity = 0.005;
 
 // Player movement
 const moveSpeed = 8;
+const sprintMultiplier = 1.5;
 const keys = {
   forward: false,
   backward: false,
   left: false,
-  right: false
+  right: false,
+  jump: false,
+  sprint: false
 };
 let joystickActive = false;
 let joystickX = 0;
 let joystickY = 0;
+
+// Jump and gravity
+let playerY = 2; // Player height
+let velocityY = 0;
+const gravity = -25;
+const jumpForce = 10;
+let isGrounded = true;
+
+// Head bobbing for realistic walking
+let headBobTime = 0;
+const headBobSpeed = 14; // How fast the bob cycles
+const headBobAmount = 0.06; // How much vertical bob
+const headBobSideAmount = 0.03; // How much side-to-side sway
+let isMoving = false;
+let currentBobOffset = 0;
+let currentSideOffset = 0;
 
 // Gun
 let gun;
@@ -1547,6 +1566,14 @@ function startGame() {
   camera.rotation.set(0, 0, 0);
   camera.position.set(0, 2, 0); // Reset player position to center
 
+  // Reset physics state
+  playerY = 2;
+  velocityY = 0;
+  isGrounded = true;
+  headBobTime = 0;
+  currentBobOffset = 0;
+  currentSideOffset = 0;
+
   // Reset game state
   gameState.score = 0;
   gameState.wave = 1;
@@ -1737,6 +1764,18 @@ function onKeyDown(event) {
     case 'ArrowRight':
       keys.right = true;
       break;
+    case 'Space':
+      keys.jump = true;
+      // Actually jump if grounded
+      if (isGrounded) {
+        velocityY = jumpForce;
+        isGrounded = false;
+      }
+      break;
+    case 'ShiftLeft':
+    case 'ShiftRight':
+      keys.sprint = true;
+      break;
   }
 }
 
@@ -1758,44 +1797,101 @@ function onKeyUp(event) {
     case 'ArrowRight':
       keys.right = false;
       break;
+    case 'Space':
+      keys.jump = false;
+      break;
+    case 'ShiftLeft':
+    case 'ShiftRight':
+      keys.sprint = false;
+      break;
   }
 }
 
-// ==================== PLAYER MOVEMENT ====================
+// ==================== PLAYER MOVEMENT WITH PHYSICS ====================
 function updatePlayerMovement(deltaTime) {
   // Calculate movement direction based on camera orientation
   const moveX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + joystickX;
   const moveZ = (keys.forward ? 1 : 0) - (keys.backward ? 1 : 0) - joystickY;
 
-  if (moveX === 0 && moveZ === 0) return;
+  // Check if player is actually moving
+  isMoving = (moveX !== 0 || moveZ !== 0) && isGrounded;
 
-  // Get forward and right vectors from camera
-  const forward = new THREE.Vector3();
-  camera.getWorldDirection(forward);
-  forward.y = 0;
-  forward.normalize();
+  // Apply gravity
+  velocityY += gravity * deltaTime;
+  playerY += velocityY * deltaTime;
 
-  const right = new THREE.Vector3();
-  right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-  right.normalize();
+  // Ground check
+  const groundLevel = 2;
+  if (playerY <= groundLevel) {
+    playerY = groundLevel;
+    velocityY = 0;
+    isGrounded = true;
+  }
 
-  // Calculate movement vector
-  const movement = new THREE.Vector3();
-  movement.addScaledVector(forward, moveZ);
-  movement.addScaledVector(right, moveX);
-  movement.normalize();
-  movement.multiplyScalar(moveSpeed * deltaTime);
+  // Calculate speed (with sprint)
+  let currentSpeed = moveSpeed;
+  if (keys.sprint) {
+    currentSpeed *= sprintMultiplier;
+  }
 
-  // Apply movement to camera
-  camera.position.add(movement);
+  // Head bobbing while moving on ground
+  if (isMoving) {
+    // Increase bob speed when sprinting
+    const bobSpeedMultiplier = keys.sprint ? 1.4 : 1.0;
+    headBobTime += deltaTime * headBobSpeed * bobSpeedMultiplier;
+
+    // Vertical bob (up and down like walking)
+    const targetBobOffset = Math.sin(headBobTime) * headBobAmount;
+    currentBobOffset += (targetBobOffset - currentBobOffset) * 0.3;
+
+    // Side-to-side sway (natural walking motion)
+    const targetSideOffset = Math.cos(headBobTime * 0.5) * headBobSideAmount;
+    currentSideOffset += (targetSideOffset - currentSideOffset) * 0.3;
+  } else {
+    // Smoothly return to neutral when stopped
+    currentBobOffset *= 0.9;
+    currentSideOffset *= 0.9;
+    if (Math.abs(currentBobOffset) < 0.001) currentBobOffset = 0;
+    if (Math.abs(currentSideOffset) < 0.001) currentSideOffset = 0;
+  }
+
+  // Apply horizontal movement
+  if (moveX !== 0 || moveZ !== 0) {
+    // Get forward and right vectors from camera
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+
+    const right = new THREE.Vector3();
+    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+    right.normalize();
+
+    // Calculate movement vector
+    const movement = new THREE.Vector3();
+    movement.addScaledVector(forward, moveZ);
+    movement.addScaledVector(right, moveX);
+    movement.normalize();
+    movement.multiplyScalar(currentSpeed * deltaTime);
+
+    // Apply movement to camera (horizontal only)
+    camera.position.x += movement.x;
+    camera.position.z += movement.z;
+  }
 
   // Keep player within bounds (arena limits)
   const boundaryLimit = 35;
   camera.position.x = Math.max(-boundaryLimit, Math.min(boundaryLimit, camera.position.x));
   camera.position.z = Math.max(-boundaryLimit, Math.min(boundaryLimit, camera.position.z));
 
-  // Reset y position (stay on ground)
-  camera.position.y = 2;
+  // Apply vertical position (jump + head bob)
+  camera.position.y = playerY + currentBobOffset;
+
+  // Apply side sway to the gun for extra realism
+  if (gun) {
+    gun.position.x = 0.3 + currentSideOffset;
+    gun.position.y = -0.25 + currentBobOffset * 0.5;
+  }
 }
 
 // ==================== INITIALIZE ====================
