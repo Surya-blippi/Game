@@ -1320,7 +1320,6 @@ function createUI() {
       <div id="joystick-knob"></div>
     </div>
     <div id="look-area"></div>
-    <div id="jump-button">↑</div>
     <div id="fire-button"><span>FIRE</span></div>
   `;
   app.appendChild(mobileControls);
@@ -1333,7 +1332,7 @@ function createUI() {
   // Mobile hint
   const mobileHint = document.createElement('div');
   mobileHint.id = 'mobile-hint';
-  mobileHint.innerHTML = '🕹️ Move • 👆 Aim • ⬆️ Jump • 🔥 Fire';
+  mobileHint.innerHTML = '🕹️ Move • 👆 Aim • 🔥 Fire';
   app.appendChild(mobileHint);
 
   // Event listeners
@@ -1360,10 +1359,6 @@ function createUI() {
     joystickContainer.addEventListener('touchstart', onJoystickStart, { passive: false });
     joystickContainer.addEventListener('touchmove', onJoystickMove, { passive: false });
     joystickContainer.addEventListener('touchend', onJoystickEnd, { passive: false });
-
-    // Jump button
-    jumpButton.addEventListener('touchstart', onJumpButtonPress, { passive: false });
-    jumpButton.addEventListener('touchend', onJumpButtonRelease, { passive: false });
   }
 }
 
@@ -1898,14 +1893,6 @@ function onKeyDown(event) {
     case 'ArrowRight':
       keys.right = true;
       break;
-    case 'Space':
-      keys.jump = true;
-      // Actually jump if grounded
-      if (isGrounded) {
-        velocityY = jumpForce;
-        isGrounded = false;
-      }
-      break;
     case 'ShiftLeft':
     case 'ShiftRight':
       keys.sprint = true;
@@ -1930,9 +1917,6 @@ function onKeyUp(event) {
     case 'KeyD':
     case 'ArrowRight':
       keys.right = false;
-      break;
-    case 'Space':
-      keys.jump = false;
       break;
     case 'ShiftLeft':
     case 'ShiftRight':
